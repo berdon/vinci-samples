@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<merger>
+
+    <dataSet config="ComAndroidSupportAppcompatV71800.aar" >
+        <source path="/Users/austinh/Workspace/Jajuka/samples/Simple/Simple Vinci/build/exploded-bundles/ComAndroidSupportAppcompatV71800.aar/assets" />
+    </dataSet>
+    <dataSet config="main" >
+        <source path="/Users/austinh/Workspace/Jajuka/samples/Simple/Simple Vinci/src/main/assets" />
+    </dataSet>
+    <dataSet config="debug" >
+        <source path="/Users/austinh/Workspace/Jajuka/samples/Simple/Simple Vinci/src/debug/assets" />
+    </dataSet>
+
+</merger>
