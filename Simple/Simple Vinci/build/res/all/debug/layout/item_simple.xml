@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-
-<ImageView xmlns:android="http://schemas.android.com/apk/res/android"
-           android:id="@+id/image"
-           android:background="#a7a7a7"
-           android:layout_width="500px"
-           android:layout_height="wrap_content"/><!-- From: file:/Users/austinh/Workspace/Jajuka/samples/Simple/Simple%20Vinci/src/main/res/layout/item_simple.xml -->
