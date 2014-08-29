@@ -1,10 +1,16 @@
 package com.vinci.samples.simple;
 
 import android.app.Activity;
+import android.app.LoaderManager;
+import android.content.CursorLoader;
+import android.content.Loader;
+import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.Point;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.view.Display;
 import android.view.View;
 import android.view.ViewGroup;
@@ -20,6 +26,7 @@ import com.vinci.util.FileUtil;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -29,10 +36,16 @@ import butterknife.InjectView;
 /**
  * TODO : austinh : JavaDocs
  */
-public class MainActivity extends Activity {
+public class MainActivity extends Activity implements LoaderManager.LoaderCallbacks<Cursor> {
     private static final String DEFAULT_IMAGE = "http://lorempixel.com/gray/%d/%d/abstract/";
     private static final String DEFAULT_PATH = "/sdcard/simple/cache-defaults";
     private static final String CACHE_PATH = "/sdcard/simple/cache";
+
+    private Cursor imagecursor, actualimagecursor;
+    private int image_column_index, actual_image_column_index;
+
+    private static final int CURSORLOADER_THUMBS = 0;
+    private static final int CURSORLOADER_REAL = 1;
 
     private int mImageSize;
     private String mDefaultImagePath;
@@ -59,7 +72,7 @@ public class MainActivity extends Activity {
 
     @InjectView(R.id.grid_view)
     GridView mGridView;
-    private ListAdapter mAdapter;
+    private BaseAdapter mAdapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -88,6 +101,9 @@ public class MainActivity extends Activity {
         mAdapterBucket = Vinci.createBucket(this, CACHE_PATH, mImageSize, mImageSize, 32);
 
         initializeViews();
+
+        getLoaderManager().initLoader(CURSORLOADER_THUMBS, null, this);
+        getLoaderManager().initLoader(CURSORLOADER_REAL, null, this);
     }
 
     @Override
@@ -100,7 +116,7 @@ public class MainActivity extends Activity {
 
     private void initializeViews() {
         mAdapter = new SimpleAdapter();
-        mGridView.setAdapter(mAdapter);
+        //mGridView.setAdapter(mAdapter);
     }
 
     private Drawable getDefaultImage() {
@@ -108,37 +124,23 @@ public class MainActivity extends Activity {
     }
 
     private class SimpleAdapter extends BaseAdapter {
-        final List<String> mPaths = new LinkedList<String>();
-
-        {
-            for (String type : IMAGE_TYPES) {
-                for (int i = 0; i < 10; i++) {
-                    mPaths.add(String.format("http://lorempixel.com/%d/%d/%s/%d/%d", mImageSize, mImageSize, type, i, i));
-                }
-                for (int i = 0; i < 10; i++) {
-                    mPaths.add(String.format("http://lorempixel.com/%d/%d/%s/%d/%d", mImageSize, mImageSize, type, i, i));
-                }
-            }
-        }
-
         @Override
         public int getCount() {
-            return mPaths.size();
+            return imagecursor.getCount();
         }
 
         @Override
         public String getItem(int position) {
-            return mPaths.get(position);
+            if (imagecursor.moveToPosition(position)) {
+                return imagecursor.getString(imagecursor.getColumnIndex(MediaStore.Images.Thumbnails.DATA));
+            }
+
+            return null;
         }
 
         @Override
         public long getItemId(int position) {
-            return 0;
-        }
-
-        @Override
-        public boolean hasStableIds() {
-            return false;
+            return position;
         }
 
         @Override
@@ -150,7 +152,7 @@ public class MainActivity extends Activity {
 
             final ViewHolder viewHolder;
             if (convertView.getTag() == null) {
-                viewHolder = new ViewHolder(convertView);
+                viewHolder = new ViewHolder(convertView, mAdapterBucket);
                 convertView.setTag(viewHolder);
             } else {
                 viewHolder = (ViewHolder) convertView.getTag();
@@ -165,8 +167,7 @@ public class MainActivity extends Activity {
                     public void onLoaded(String path, Drawable drawable, int width, int height) {
                         synchronized (viewHolder) {
                             if (viewHolder.mPath.equals(path)) {
-                                viewHolder.mArtworkLoaded = true;
-                                viewHolder.mImageView.setImageDrawable(drawable);
+                                viewHolder.setArtwork(drawable);
                                 viewHolder.mImageView.setBackgroundColor(Color.GREEN);
                             }
                         }
@@ -181,6 +182,7 @@ public class MainActivity extends Activity {
                         }
                     }
                 });
+
                 if (drawable == null) {
                     viewHolder.setArtwork(getDefaultImage());
                 } else {
@@ -193,13 +195,14 @@ public class MainActivity extends Activity {
     }
 
     public static class ViewHolder implements BucketListener {
+        private final Bucket mBucket;
         private volatile String mPath = null;
         private volatile boolean mArtworkLoaded = false;
         @InjectView(R.id.image) ImageView mImageView;
 
-
-        private ViewHolder(View view) {
+        private ViewHolder(View view, Bucket bucket) {
             ButterKnife.inject(this, view);
+            mBucket = bucket;
         }
 
         private synchronized boolean shouldUpdate(String path) {
@@ -228,5 +231,59 @@ public class MainActivity extends Activity {
 
         @Override
         public void onFailure(String path, int width, int height) { }
+    }
+
+    @Override
+    public Loader<Cursor> onCreateLoader(int cursorID, Bundle arg1) {
+        CursorLoader cl = null;
+        ArrayList<String> img = new ArrayList<String>();
+        switch (cursorID) {
+            case CURSORLOADER_THUMBS:
+                img.add(MediaStore.Images.Media._ID);
+                img.add(MediaStore.Images.Thumbnails.DATA);
+                img.add(MediaStore.Images.Media.DATE_ADDED);
+                break;
+            case CURSORLOADER_REAL:
+                img.add(MediaStore.Images.Thumbnails.DATA);
+                img.add(MediaStore.Images.Media.DATE_ADDED);
+                break;
+            default:
+                break;
+        }
+        cl = new CursorLoader(MainActivity.this, MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                img.toArray(new String[img.size()]), null, null, MediaStore.Images.Media.DATE_ADDED + " desc");
+        return cl;
+    }
+
+
+    @Override
+    public void onLoadFinished(Loader<Cursor> loader, Cursor cursor) {
+        if (cursor == null) {
+            // NULL cursor. This usually means there's no image database yet....
+            return;
+        }
+        switch (loader.getId()) {
+            case CURSORLOADER_THUMBS:
+                imagecursor = cursor;
+                image_column_index = imagecursor.getColumnIndex(MediaStore.Images.Media._ID);
+                mAdapter.notifyDataSetChanged();
+                mGridView.setAdapter(mAdapter);
+                break;
+            case CURSORLOADER_REAL:
+                actualimagecursor = cursor;
+                actual_image_column_index = actualimagecursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
+                break;
+            default:
+                break;
+        }
+    }
+
+    @Override
+    public void onLoaderReset(Loader<Cursor> loader) {
+        if (loader.getId() == CURSORLOADER_THUMBS) {
+            imagecursor = null;
+        } else if (loader.getId() == CURSORLOADER_REAL) {
+            actualimagecursor = null;
+        }
     }
 }
